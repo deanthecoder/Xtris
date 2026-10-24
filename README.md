@@ -1,9 +1,12 @@
+[![Follow @deanthecoder](https://img.shields.io/twitter/url/https/twitter.com/deanthecoder.svg?style=social&label=Follow%20%40deanthecoder)](https://x.com/deanthecoder) [![GitHub stars](https://img.shields.io/github/stars/deanthecoder/Xtris?style=social&label=Star)](https://github.com/deanthecoder/Xtris/stargazers)
+
 # Xtris
 
-A snowy falling-block game I wrote in C for DOS in **1996**, now playable in a browser at **[deanthecoder.github.io/Xtris](https://deanthecoder.github.io/Xtris/)**.
+**[Play Xtris](https://deanthecoder.github.io/Xtris/)**
 
-[![Follow @deanthecoder](https://img.shields.io/twitter/url/https/twitter.com/deanthecoder.svg?style=social&label=Follow%20%40deanthecoder)](https://x.com/deanthecoder)
-[![GitHub stars](https://img.shields.io/github/stars/deanthecoder/Xtris?style=social&label=Star)](https://github.com/deanthecoder/Xtris/stargazers)
+![Xtris running in the browser, with falling blocks and a snowy playfield](img/gameplay.jpg)
+
+A snowy falling-block game I wrote in C for DOS in **1996**, now playable in a browser.
 
 ## Play
 
