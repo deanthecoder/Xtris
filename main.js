@@ -17,6 +17,7 @@ class Xtris {
     this.snowLayer = new Uint8Array(320 * 200);
     this.fame = this.loadFame();
     this.audio = {};
+    this.audioData = {};
     this.audioContext = null;
     this.introStart = 0;
   }
@@ -28,7 +29,7 @@ class Xtris {
       vga.loadFont('FONTS.DAT'),
     ]);
     this.bindInput();
-    this.prepareAudio();
+    this.audioReady = this.prepareAudio();
     this.phase = 'intro';
     this.introStart = performance.now();
     status.textContent = 'Press any key to start';
@@ -50,7 +51,13 @@ class Xtris {
     fit();
     document.querySelector('#new-game').addEventListener('click', () => { this.unlockAudio(); this.newGame(); canvas.focus(); });
     document.querySelector('#pause').addEventListener('click', () => { this.togglePause(); canvas.focus(); });
-    canvas.addEventListener('pointerdown', event => {
+    document.querySelector('#sound').addEventListener('change', event => {
+      if (event.target.checked) {
+        this.unlockAudio();
+        this.audioReady.then(() => this.sound('rotate'));
+      }
+    });
+    const screenPointer = event => {
       event.preventDefault();
       this.unlockAudio();
       canvas.focus();
@@ -70,6 +77,13 @@ class Xtris {
       if (Math.abs(x) > Math.abs(y)) this.move(x < 0 ? -1 : 1);
       else if (y < 0) this.rotate();
       else this.hardDrop();
+    };
+    canvas.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse') screenPointer(event);
+    });
+    // Touch activation happens on release in iOS Safari.
+    canvas.addEventListener('pointerup', event => {
+      if (event.pointerType !== 'mouse') screenPointer(event);
     });
     addEventListener('keydown', event => {
       const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', ' '];
@@ -80,19 +94,61 @@ class Xtris {
   }
 
   async prepareAudio() {
+    const files = { rotate: 'DINK.snd', drop: 'FALL.snd', line: 'LINE.snd',
+      high: 'Woo.snd', sheep: 'Sheep.snd' };
+    await Promise.all(Object.entries(files).map(async ([key, file]) => {
+      try {
+        const response = await fetch(`assets/${file}`);
+        if (!response.ok) throw new Error(`Could not load ${file}`);
+        this.audioData[key] = await response.arrayBuffer();
+        if (this.audioContext) this.audio[key] = this.readPCM(this.audioData[key]);
+      } catch (error) { console.warn(`${file} unavailable:`, error); }
+    }));
+  }
+  readPCM(buffer) {
+    const bytes = new Uint8Array(buffer), view = new DataView(buffer);
+    const tag = at => String.fromCharCode(...bytes.subarray(at, at + 4));
+    if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('Not a WAV file');
+    let sampleRate = 0, samples = null;
+    for (let at = 12; at + 8 <= bytes.length;) {
+      const size = view.getUint32(at + 4, true), start = at + 8;
+      if (start + size > bytes.length) throw new Error('Truncated WAV file');
+      if (tag(at) === 'fmt ') {
+        if (view.getUint16(start, true) !== 1 || view.getUint16(start + 2, true) !== 1 ||
+            view.getUint16(start + 14, true) !== 8) throw new Error('Expected 8-bit mono PCM');
+        sampleRate = view.getUint32(start + 4, true);
+      }
+      if (tag(at) === 'data') samples = bytes.subarray(start, start + size);
+      at = start + size + (size & 1);
+    }
+    if (!sampleRate || !samples) throw new Error('Missing WAV audio data');
+    const sound = this.audioContext.createBuffer(1, samples.length, sampleRate);
+    const channel = sound.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) channel[i] = (samples[i] - 128) / 128;
+    return sound;
+  }
+  unlockAudio() {
+    if (!document.querySelector('#sound').checked) return;
     const Context = window.AudioContext || window.webkitAudioContext;
     if (!Context) return;
-    try {
-      this.audioContext = new Context();
-      const files = { rotate: 'DINK.snd', drop: 'FALL.snd', line: 'LINE.snd',
-        high: 'Woo.snd', sheep: 'Sheep.snd' };
-      await Promise.all(Object.entries(files).map(async ([key, file]) => {
-        const response = await fetch(`assets/${file}`);
-        if (response.ok) this.audio[key] = await this.audioContext.decodeAudioData(await response.arrayBuffer());
-      }));
-    } catch (error) { console.warn('Sound unavailable:', error); }
+    if (!this.audioContext) {
+      try {
+        // WebKit's playback session can be heard with the iPhone silent switch on.
+        if (navigator.audioSession) navigator.audioSession.type = 'playback';
+      } catch (error) { console.warn('Could not select playback audio:', error); }
+      try {
+        this.audioContext = new Context();
+        const starter = this.audioContext.createBufferSource();
+        starter.buffer = this.audioContext.createBuffer(1, 1, 22050);
+        starter.connect(this.audioContext.destination);
+        starter.start();
+        for (const [key, data] of Object.entries(this.audioData))
+          this.audio[key] = this.readPCM(data);
+      } catch (error) { console.warn('Sound unavailable:', error); return; }
+    }
+    if (this.audioContext.state !== 'running')
+      this.audioContext.resume().catch(error => console.warn('Could not resume sound:', error));
   }
-  unlockAudio() { if (this.audioContext?.state === 'suspended') this.audioContext.resume(); }
   sound(name) {
     if (!document.querySelector('#sound').checked || !this.audioContext || !this.audio[name]) return;
     const source = this.audioContext.createBufferSource();
