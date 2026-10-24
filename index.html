@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Play Xtris, a snowy 1996 DOS puzzle game restored from Dean Edis's original C source.">
+  <title>Xtris — a 1996 DOS game restored</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header><h1>Xtris</h1><p>A 1996 DOS game restored for the browser</p></header>
+    <div class="screen-wrap"><canvas id="screen" width="320" height="200" tabindex="0" aria-label="Xtris game screen"></canvas></div>
+    <div class="toolbar">
+      <button id="new-game" type="button">New game</button>
+      <button id="pause" type="button">Pause</button>
+      <label><input id="sound" type="checkbox" checked> Sound</label>
+      <label><input id="crt-aspect" type="checkbox" checked> CRT aspect ratio</label>
+      <span id="status" role="status">Loading original assets…</span>
+    </div>
+    <p class="help"><strong>← →</strong> move · <strong>↑</strong> rotate · <strong>↓</strong> drop · <strong>Esc</strong> quit · <strong>P</strong> pause. Click the game screen if the keys do not respond.</p>
+  </main>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
