@@ -5,6 +5,7 @@ const canvas = document.querySelector('#screen');
 const status = document.querySelector('#status');
 const vga = new VGA(canvas);
 const LEFT = 99, TOP = 9, COLUMNS = 12, ROWS = 18;
+const CHEAT = 'IAMAWOMAN';
 const emptyBoard = () => Array.from({ length: ROWS }, () => Array(COLUMNS).fill(0));
 
 class Xtris {
@@ -49,7 +50,27 @@ class Xtris {
     fit();
     document.querySelector('#new-game').addEventListener('click', () => { this.unlockAudio(); this.newGame(); canvas.focus(); });
     document.querySelector('#pause').addEventListener('click', () => { this.togglePause(); canvas.focus(); });
-    canvas.addEventListener('pointerdown', () => { this.unlockAudio(); canvas.focus(); if (this.phase === 'intro') this.newGame(); });
+    canvas.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      this.unlockAudio();
+      canvas.focus();
+      if (this.phase === 'intro' || this.phase === 'hall' || this.phase === 'stopped') {
+        this.newGame();
+        return;
+      }
+      if (this.phase === 'name') {
+        this.acceptName();
+        this.newGame();
+        return;
+      }
+      if (this.phase !== 'playing') return;
+      const bounds = canvas.getBoundingClientRect();
+      const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+      const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+      if (Math.abs(x) > Math.abs(y)) this.move(x < 0 ? -1 : 1);
+      else if (y < 0) this.rotate();
+      else this.hardDrop();
+    });
     addEventListener('keydown', event => {
       const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', ' '];
       if (keys.includes(event.key)) event.preventDefault();
@@ -93,23 +114,34 @@ class Xtris {
     this.snowLayer.fill(0);
     this.snow = Array.from({ length: 70 }, () => ({
       x: Math.floor(Math.random() * 320), y: Math.floor(Math.random() * 190),
-      speed: Math.random() < 0.5 ? 1 : 2,
+      speed: Math.floor(Math.random() * 2),
     }));
     this.snowStep = 0;
+    this.snowBeat = 0;
   }
   inPlayFrame(x, y) { return x > LEFT - 7 && x < LEFT + 127 && y > TOP - 7 && y < TOP + 187; }
+  snowSolid(x, y) {
+    if (x < 0 || x >= 320 || y >= 200) return true;
+    if (y < 0) return false;
+    const at = y * 320 + x;
+    return this.snowLayer[at] !== 0 || vga.pixels[at] >= 17;
+  }
   updateSnow(dt) {
     this.snowStep += dt * 45;
     while (this.snowStep >= 1) {
       this.snowStep--;
+      this.snowBeat++;
       for (const flake of this.snow) {
-        if (Math.random() > 1 / flake.speed) continue;
-        let nextY = flake.y + 1;
-        if (nextY >= 199 || this.snowLayer[nextY * 320 + flake.x]) {
-          if (!this.inPlayFrame(flake.x, flake.y)) this.snowLayer[flake.y * 320 + flake.x] = 31;
+        if (flake.speed > this.snowBeat % 2) continue;
+        if (!this.snowSolid(flake.x, flake.y + 1)) flake.y++;
+        else if (!this.snowSolid(flake.x + 1, flake.y + 1)) flake.x++;
+        else if (!this.snowSolid(flake.x - 1, flake.y + 1)) flake.x--;
+        else {
+          if (!this.inPlayFrame(flake.x, flake.y) && flake.y >= 0 && flake.y < 200)
+            this.snowLayer[flake.y * 320 + flake.x] = 31;
           flake.x = Math.floor(Math.random() * 320);
           flake.y = 0;
-        } else flake.y = nextY;
+        }
       }
     }
   }
@@ -118,6 +150,8 @@ class Xtris {
     this.board = emptyBoard();
     this.score = 0;
     this.difficulty = 1;
+    this.cheatProgress = 0;
+    this.cheatUsed = false;
     this.fall = 0;
     this.current = null;
     this.resetSnow();
@@ -201,16 +235,34 @@ class Xtris {
       this.name = '';
       this.phase = 'name';
       this.sound('high');
-      status.textContent = 'New high score — enter your name';
+      status.textContent = 'New high score — enter a name, or tap to save as NONAME and play again';
     } else {
       this.phase = 'hall';
       this.sound('sheep');
-      status.textContent = 'Game over — Y for another game, N to stop';
+      status.textContent = 'Game over — tap or press Y to play again';
     }
   }
   togglePause() {
     if (this.phase === 'playing') { this.phase = 'paused'; status.textContent = 'Paused'; }
     else if (this.phase === 'paused') { this.phase = 'playing'; status.textContent = `Score ${String(this.score).padStart(6, '0')}`; }
+  }
+  acceptName() {
+    this.fame[this.rank].name = this.name.trim() || 'NONAME';
+    this.saveFame();
+    this.phase = 'hall';
+    status.textContent = 'Game over — tap or press Y to play again';
+  }
+  cheatKey(key) {
+    if (this.cheatUsed || !/^[a-z]$/i.test(key)) return;
+    const letter = key.toUpperCase();
+    this.cheatProgress = letter === CHEAT[this.cheatProgress] ? this.cheatProgress + 1 : letter === CHEAT[0] ? 1 : 0;
+    if (this.cheatProgress === CHEAT.length) {
+      this.cheatUsed = true;
+      this.cheatProgress = 0;
+      this.score = (this.score + 20000) & 0xffff;
+      status.textContent = `Score ${String(this.score).padStart(6, '0')}`;
+      this.sound('sheep');
+    }
   }
   key(key) {
     if (this.phase === 'intro') { this.newGame(); return; }
@@ -221,11 +273,8 @@ class Xtris {
       return;
     }
     if (this.phase === 'name') {
-      if (key === 'Enter') {
-        this.fame[this.rank].name = this.name.trim() || 'NONAME';
-        this.saveFame(); this.phase = 'hall';
-        status.textContent = 'Game over — Y for another game, N to stop';
-      } else if (key === 'Backspace') this.name = this.name.slice(0, -1);
+      if (key === 'Enter') this.acceptName();
+      else if (key === 'Backspace') this.name = this.name.slice(0, -1);
       else if (/^[a-z0-9 .!?'-]$/i.test(key) && this.name.length < 12) this.name += key.toUpperCase();
       return;
     }
@@ -238,9 +287,10 @@ class Xtris {
     if (key === 'ArrowLeft') this.move(-1);
     else if (key === 'ArrowRight') this.move(1);
     else if (key === 'ArrowUp') this.rotate();
-    else if (key === 'ArrowDown' || key === ' ') this.hardDrop();
+    else if (key === 'ArrowDown' || (key === ' ' && this.cheatProgress === 0)) this.hardDrop();
     else if (key === 'Escape') { this.phase = 'confirm'; status.textContent = 'Quit game? Y / N'; }
     else if (key.toLowerCase() === 'p') this.togglePause();
+    else this.cheatKey(key);
   }
 
   block(x, y, color) {
@@ -259,14 +309,13 @@ class Xtris {
       vga.text(label[ch], 10 + ch * 5, 7 + y, Math.max(144, Math.min(159, 154 + y)));
     }
   }
-  drawPlay() {
+  drawPlay(dt) {
     vga.setPalette(vga.sprites['AREA.SPR'].palette);
     vga.clear(0);
     vga.sprite(vga.sprites['AREA.SPR'], 93, 3);
     vga.sprite(vga.sprites['BALLS.SPR'], 20, 167);
     vga.sprite(vga.sprites['SNOWMAN.SPR'], 235, 137);
     vga.fill(0, 199, 319, 199, 31);
-    this.drawSnow();
     for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLUMNS; col++)
       if (this.board[row][col]) this.block(LEFT + col * 10, TOP + row * 10, this.board[row][col]);
     if (this.current && ['playing', 'paused', 'confirm'].includes(this.phase)) {
@@ -274,6 +323,8 @@ class Xtris {
       for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++)
         if (grid[row * 4 + col]) this.block(LEFT + (x + col) * 10, TOP + (y + row) * 10, color);
     }
+    if (this.phase !== 'paused') this.updateSnow(dt);
+    this.drawSnow();
     this.drawScore();
     if (this.phase === 'paused') this.overlay('PAUSED', 'PRESS P TO CONTINUE');
     if (this.phase === 'confirm') this.overlay('ARE YOU SURE?', 'Y YES   N NO');
@@ -285,8 +336,8 @@ class Xtris {
     vga.text(title, 122, 89, 191);
     vga.text(instruction, 115, 102, 31);
   }
-  drawHall() {
-    this.drawPlay();
+  drawHall(dt) {
+    this.drawPlay(dt);
     vga.fill(LEFT, TOP, LEFT + 121, TOP + 181, 16);
     vga.text('HALL OF FAME', 134, 30, 223);
     for (let i = 0; i < 10; i++) {
@@ -320,9 +371,8 @@ class Xtris {
         this.fall += dt * this.difficulty;
         if (this.fall >= 1) { this.fall -= 1; this.down(); }
       }
-      if (this.phase !== 'paused') this.updateSnow(dt);
-      if (this.phase === 'name' || this.phase === 'hall' || this.phase === 'stopped') this.drawHall();
-      else this.drawPlay();
+      if (this.phase === 'name' || this.phase === 'hall' || this.phase === 'stopped') this.drawHall(dt);
+      else this.drawPlay(dt);
       vga.present();
     }
     requestAnimationFrame(next => this.frame(next));

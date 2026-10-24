@@ -17,6 +17,10 @@ Fit falling shapes together to complete horizontal rows. Completed rows disappea
 | P | Pause / resume |
 | Escape | Quit prompt |
 
+On a phone or with a mouse, tap the **left** or **right** of the game screen to move, the **top** to rotate, and the **bottom** to drop. Tap the screen after game over to play again. If you reached the hall of fame, a tap saves the score as `NONAME` before restarting; a keyboard can enter a name instead.
+
+The original cheat phrase, **“I am a woman”**, gives 20,000 points once per game. Type it during play, with or without spaces. The surviving DOS code contains this phrase backwards, but its letter-only input check prevents the spaces from being entered, so the browser version makes the apparent intent work.
+
 Use **New game** to restart. **CRT aspect ratio** stretches the original 320 × 200 picture to the 4:3 proportions typical of a DOS monitor; turn it off for square pixels. The game also scales to fit the browser window.
 
 ## The restoration
